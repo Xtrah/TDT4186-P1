@@ -7,10 +7,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
+
+struct alarm {
+    pid_t pid;
+    time_t alarm_time;
+    int isActive;
+};
+
+struct alarm alarms[10] = {10};
+int alarm_index = 0;
 
 // Format seconds since epoch to string YYYY-MM-DD HH:MM:SS
 // https://zetcode.com/articles/cdatetime/
-// Remember to free!
+// Remember to free the pointer!
 char* time_to_string(time_t raw_time) {
     if(raw_time == -1) return "Error";
     struct tm *local_time = localtime(&raw_time);
@@ -29,49 +39,72 @@ char* time_to_string(time_t raw_time) {
 time_t string_to_time(char* date_time_string) {
     struct tm time_struct;
     if(strptime(date_time_string, "%Y-%m-%d_%H:%M:%S", &time_struct) == NULL) return -1;
+    time_struct.tm_isdst = -1; // magic to remove timezones
     return mktime(&time_struct);
 }
 
 void schedule() {
+    if (alarm_index >= sizeof (alarms) / sizeof (struct alarm)) {   
+        printf("Alarm clock is full of stuff!");
+        return;
+    }
+    
     printf("Schedule alarm at which date and time?\n");
     printf("YYYY-MM-DD_HH:MM:SS\n");
     
-    //time_t alarm = 0;
-    //time_t current_time = time(NULL);
-    //do {
     char input[20];
     scanf("%s", input);
     time_t alarm_time = string_to_time(input);
     time_t current_time = time(NULL);
 
     if (current_time >= alarm_time) {
-        printf("current time is bigger than alarm time\n");
-        printf("current: %ld\nalarm: %ld\n", current_time, alarm_time);
+        printf("Cannot set alarm in the past!\n");
         return;
     }
 
-    pid_t alarm = fork();
-    if (alarm != 0) {
-        printf("Alarm will ring in %ld seconds.\n", alarm_time-current_time);
+    pid_t alarm_pid = fork();
+    // Inserting alarm in array.
+    struct alarm alarm_struct;
+    alarm_struct.pid = alarm_pid;
+    alarm_struct.alarm_time = alarm_time;
+    alarm_struct.isActive = 1;
+
+    alarms[alarm_index] = alarm_struct;
+    
+    if (alarm_pid == 0) {        
         sleep(alarm_time - current_time);
-        printf("Alarm %d!\a\n", alarm);
-        // kill(alarm, SIGKILL);
+        printf("\nAlarm #%d says RINGRING!\a\n", alarm_index + 1);
+        // KILL PROCESS AFTER
+        exit(EXIT_SUCCESS);
     }
     else {
-        printf("Parent exited...\n");
+        int status;
+        pid_t exit_pid = waitpid(alarm_pid, &status, WEXITED);
+        if (WIFEXITED(status)) printf("Exit\n");
+
     }
-    //} while (current_time > alarm || alarm != 0);
+    alarm_index++;
 }
 
 void list() {
-
+    for (int i = 0; i < alarm_index; i++) {
+        struct alarm a = alarms[i];
+        printf("Alarms:\n");
+        printf("- Alarm #%d - time: %s (PID: %d)\n", i+1, time_to_string(a.alarm_time), a.pid);
+    }
 }
 
 void cancel() {
+    printf("Which alarm do you want to stop? ");
+    int alarm_number;
+    scanf("%d", &alarm_number);
 
+    int alarm_index = alarm_number - 1;
+    pid_t pid = alarms[alarm_index].pid;
+    alarms[alarm_index].isActive = 0;
+    kill(pid, SIGKILL);
+    printf("Stopped alarm #%d (PID: %d)\n", alarm_number, pid);
 }
-
-
 
 int main() {
     
@@ -90,8 +123,10 @@ int main() {
             case 'l': list(); break;
             case 'c': cancel(); break;
             case 'x': break;
-            default: printf("Try again...");
+            default: printf("Choose action > ");
         }
     }
+
+    
     return 0;
 }

@@ -39,7 +39,7 @@ char* time_to_string(time_t raw_time) {
 time_t string_to_time(char* date_time_string) {
     struct tm time_struct;
     if(strptime(date_time_string, "%Y-%m-%d_%H:%M:%S", &time_struct) == NULL) return -1;
-    time_struct.tm_isdst = -1; // magic to remove timezones
+    time_struct.tm_isdst = -1; // magic to remove daylight saving time
     return mktime(&time_struct);
 }
 
@@ -74,16 +74,13 @@ void schedule() {
     if (alarm_pid == 0) {        
         sleep(alarm_time - current_time);
         printf("\nAlarm #%d says RINGRING!\a\n", alarm_index + 1);
+        exec("mpg123 ~/OS/P1/RINGTONE.mp3");
         // KILL PROCESS AFTER
         exit(EXIT_SUCCESS);
     }
-    else {
-        int status;
-        pid_t exit_pid = waitpid(alarm_pid, &status, WEXITED);
-        if (WIFEXITED(status)) printf("Exit\n");
-
+    else if (alarm_pid > 0) {
+        alarm_index++;
     }
-    alarm_index++;
 }
 
 void list() {
@@ -106,6 +103,12 @@ void cancel() {
     printf("Stopped alarm #%d (PID: %d)\n", alarm_number, pid);
 }
 
+void ring() {
+    // mpg123 -vC NARUTO_ALARM_RINGTONE.mp3
+
+
+}
+
 int main() {
     
     time_t seconds = time(NULL);
@@ -125,6 +128,7 @@ int main() {
             case 'x': break;
             default: printf("Choose action > ");
         }
+        waitpid(-1, NULL, WNOHANG);
     }
 
     
